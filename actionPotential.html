@@ -1,0 +1,1101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Action Potential · Interactive Hodgkin-Huxley</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #05070d;
+    --panel: rgba(10, 16, 28, 0.75);
+    --border: rgba(60, 100, 160, 0.15);
+    --text: #e0e6ed;
+    --muted: #5a6a85;
+    --cyan: #00d4ff;
+    --orange: #ff6b35;
+    --green: #00ff88;
+    --purple: #b366ff;
+    --yellow: #ffd700;
+    --red: #ff4757;
+  }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background:
+      radial-gradient(ellipse at 20% 0%, rgba(0, 212, 255, 0.06), transparent 55%),
+      radial-gradient(ellipse at 80% 100%, rgba(179, 102, 255, 0.05), transparent 55%);
+    pointer-events: none; z-index: 0;
+  }
+  #app {
+    position: relative; z-index: 1;
+    display: flex; flex-direction: column;
+    height: 100vh;
+  }
+  .header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 18px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, rgba(10, 16, 28, 0.9), rgba(5, 7, 13, 0.7));
+    flex-shrink: 0;
+  }
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  .logo {
+    width: 34px; height: 34px; border-radius: 9px;
+    background: linear-gradient(135deg, #00d4ff, #b366ff);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+    box-shadow: 0 0 22px rgba(0, 212, 255, 0.35);
+  }
+  h1 { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+  .subtitle { font-size: 10px; color: var(--muted); font-family: ui-monospace, monospace; margin-top: 1px; }
+  .header-right { display: flex; gap: 22px; }
+  .stat { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
+  .stat-label {
+    font-size: 9px; color: var(--muted); text-transform: uppercase;
+    letter-spacing: 0.12em; font-family: ui-monospace, monospace;
+  }
+  .stat-value {
+    font-size: 14px; font-weight: 600;
+    font-family: ui-monospace, monospace;
+    color: var(--cyan);
+    text-shadow: 0 0 12px rgba(0, 212, 255, 0.4);
+    transition: color 0.2s;
+  }
+  .main {
+    flex: 1; display: grid;
+    grid-template-columns: 1.45fr 1fr;
+    gap: 10px; padding: 10px;
+    min-height: 0; overflow: hidden;
+  }
+  .col { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 11px;
+    overflow: hidden;
+    display: flex; flex-direction: column;
+    min-height: 0; position: relative;
+    backdrop-filter: blur(8px);
+  }
+  .panel::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(0, 212, 255, 0.35), transparent);
+    pointer-events: none;
+  }
+  .panel-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 7px 12px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .panel-title {
+    font-size: 10px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.1em;
+  }
+  .panel-badge {
+    font-size: 9px; color: var(--muted);
+    font-family: ui-monospace, monospace;
+    padding: 2px 6px; border-radius: 4px;
+    background: rgba(0, 212, 255, 0.07);
+    border: 1px solid rgba(0, 212, 255, 0.15);
+    transition: all 0.3s;
+  }
+  canvas { display: block; width: 100%; height: 100%; flex: 1; min-height: 0; }
+  .phases {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 5px; padding: 8px;
+  }
+  .phase {
+    display: flex; align-items: center; gap: 7px;
+    padding: 5px 8px; border-radius: 6px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid transparent;
+    transition: all 0.25s ease;
+  }
+  .phase.active {
+    background: rgba(0, 212, 255, 0.08);
+    border-color: rgba(0, 212, 255, 0.25);
+    transform: translateX(2px);
+  }
+  .phase-dot {
+    width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+    transition: all 0.25s;
+  }
+  .phase.active .phase-dot { box-shadow: 0 0 10px currentColor; }
+  .phase-name { font-size: 10px; font-weight: 500; letter-spacing: 0.01em; }
+  .controls { padding: 10px; display: flex; flex-direction: column; gap: 9px; }
+  .btn-row { display: flex; gap: 8px; }
+  .btn {
+    flex: 1;
+    padding: 9px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--text);
+    font-size: 11px; font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    letter-spacing: 0.02em;
+  }
+  .btn:hover { background: rgba(255, 255, 255, 0.07); border-color: rgba(0, 212, 255, 0.3); }
+  .btn:active { transform: scale(0.97); }
+  .btn-primary {
+    background: linear-gradient(135deg, rgba(0, 212, 255, 0.2), rgba(179, 102, 255, 0.15));
+    border-color: rgba(0, 212, 255, 0.4);
+    color: #ffffff;
+    box-shadow: 0 0 20px rgba(0, 212, 255, 0.15);
+  }
+  .btn-primary:hover {
+    background: linear-gradient(135deg, rgba(0, 212, 255, 0.3), rgba(179, 102, 255, 0.25));
+    box-shadow: 0 0 30px rgba(0, 212, 255, 0.3);
+  }
+  .presets { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+  .preset {
+    padding: 6px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.02);
+    color: var(--muted);
+    font-size: 10px; font-family: inherit;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.02em;
+  }
+  .preset:hover { color: var(--text); border-color: rgba(0, 212, 255, 0.25); }
+  .preset.active {
+    color: var(--cyan);
+    border-color: rgba(0, 212, 255, 0.4);
+    background: rgba(0, 212, 255, 0.08);
+  }
+  .slider-row {
+    display: grid;
+    grid-template-columns: 55px 1fr 45px;
+    align-items: center;
+    gap: 8px;
+    font-size: 10px;
+    color: var(--muted);
+    font-family: ui-monospace, monospace;
+    letter-spacing: 0.04em;
+  }
+  .slider-value { text-align: right; color: var(--text); }
+  input[type=range] {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 3px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    outline: none;
+    cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: var(--cyan);
+    box-shadow: 0 0 10px rgba(0, 212, 255, 0.6);
+    cursor: pointer;
+    transition: transform 0.15s;
+  }
+  input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+  input[type=range]::-moz-range-thumb {
+    width: 12px; height: 12px; border: none;
+    border-radius: 50%;
+    background: var(--cyan);
+    box-shadow: 0 0 10px rgba(0, 212, 255, 0.6);
+    cursor: pointer;
+  }
+  @media (max-width: 900px) {
+    .main { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="header">
+    <div class="header-left">
+      <div class="logo">⚡</div>
+      <div>
+        <h1>The Action Potential</h1>
+        <div class="subtitle">Hodgkin-Huxley · real-time simulation</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="stat">
+        <div class="stat-label">V<sub>m</sub></div>
+        <div class="stat-value" id="vm-value">-65.0 mV</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Time</div>
+        <div class="stat-value" id="time-value">0.0 ms</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Spikes</div>
+        <div class="stat-value" id="spike-value">0</div>
+      </div>
+    </div>
+  </header>
+
+  <main class="main">
+    <div class="col">
+      <div class="panel" style="flex: 0 0 130px;">
+        <div class="panel-header">
+          <span class="panel-title">Neuron</span>
+          <span class="panel-badge">propagation</span>
+        </div>
+        <canvas id="neuron-canvas"></canvas>
+      </div>
+      <div class="panel" style="flex: 1;">
+        <div class="panel-header">
+          <span class="panel-title">Membrane Patch</span>
+          <span class="panel-badge" id="patch-badge">Na⁺ · K⁺ · leak</span>
+        </div>
+        <canvas id="membrane-canvas"></canvas>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="panel" style="flex: 1;">
+        <div class="panel-header">
+          <span class="panel-title">Membrane Potential</span>
+          <span class="panel-badge">V(t)</span>
+        </div>
+        <canvas id="trace-canvas"></canvas>
+      </div>
+      <div class="panel" style="flex: 0 0 auto;">
+        <div class="panel-header">
+          <span class="panel-title">Phase</span>
+          <span class="panel-badge" id="phase-badge">resting</span>
+        </div>
+        <div class="phases" id="phases"></div>
+      </div>
+      <div class="panel" style="flex: 0 0 auto;">
+        <div class="panel-header">
+          <span class="panel-title">Controls</span>
+          <span class="panel-badge" id="preset-badge">normal</span>
+        </div>
+        <div class="controls">
+          <div class="btn-row">
+            <button class="btn btn-primary" id="stimulate-btn"><span>⚡</span> Stimulate</button>
+            <button class="btn" id="reset-btn">Reset</button>
+          </div>
+          <div class="presets">
+            <button class="preset active" data-preset="normal">Normal</button>
+            <button class="preset" data-preset="ttx">TTX (Na⁺ block)</button>
+            <button class="preset" data-preset="hyperkalemia">Hyperkalemia</button>
+            <button class="preset" data-preset="hypocalcemia">Hypocalcemia</button>
+          </div>
+          <div class="slider-row">
+            <label>Speed</label>
+            <input type="range" id="speed" min="1" max="100" value="40">
+            <span class="slider-value" id="speed-value">1.0×</span>
+          </div>
+          <div class="slider-row">
+            <label>Stimulus</label>
+            <input type="range" id="stim" min="1" max="40" value="15">
+            <span class="slider-value" id="stim-value">15</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  // ============ CONSTANTS ============
+  const DT = 0.01;
+  const HISTORY_DURATION = 60;
+  const HISTORY_INTERVAL = 0.06;
+  const HISTORY_SIZE = Math.ceil(HISTORY_DURATION / HISTORY_INTERVAL) + 2;
+  const STIM_DURATION = 0.5;
+  const MAX_IONS = 240;
+
+  const PHASE_COLORS = {
+    resting: '#5a6a85',
+    threshold: '#ffd700',
+    depolarization: '#ff6b35',
+    peak: '#ff4757',
+    repolarization: '#00d4ff',
+    hyperpolarization: '#b366ff',
+  };
+
+  const PHASES = [
+    { id: 'resting', name: 'Resting', desc: 'V ≈ -65 mV' },
+    { id: 'threshold', name: 'Threshold', desc: 'V ≈ -55 mV' },
+    { id: 'depolarization', name: 'Depolarization', desc: 'Na⁺ in' },
+    { id: 'peak', name: 'Peak', desc: 'V ≈ +40 mV' },
+    { id: 'repolarization', name: 'Repolarization', desc: 'K⁺ out' },
+    { id: 'hyperpolarization', name: 'Hyperpolarization', desc: 'undershoot' },
+  ];
+
+  const PRESETS = {
+    normal:       { gNa: 120, gK: 36, ENa: 50, EK: -77, label: 'normal' },
+    ttx:          { gNa: 0,   gK: 36, ENa: 50, EK: -77, label: 'TTX' },
+    hyperkalemia: { gNa: 120, gK: 36, ENa: 50, EK: -60, label: 'hyperkalemia' },
+    hypocalcemia: { gNa: 160, gK: 36, ENa: 50, EK: -77, label: 'hypocalcemia' },
+  };
+
+  // ============ HH MODEL ============
+  const HH = { Cm: 1.0, gL: 0.3, EL: -54.4 };
+
+  const alphaM = V => { const x = V + 40; return Math.abs(x) < 1e-7 ? 0.1 : 0.1 * x / (1 - Math.exp(-x / 10)); };
+  const betaM  = V => 4 * Math.exp(-(V + 65) / 18);
+  const alphaH = V => 0.07 * Math.exp(-(V + 65) / 20);
+  const betaH  = V => 1 / (1 + Math.exp(-(V + 35) / 10));
+  const alphaN = V => { const x = V + 55; return Math.abs(x) < 1e-7 ? 0.1 : 0.01 * x / (1 - Math.exp(-x / 10)); };
+  const betaN  = V => 0.125 * Math.exp(-(V + 65) / 80);
+
+  // ============ STATE ============
+  const sim = {
+    V: -65, m: 0.053, h: 0.596, n: 0.318,
+    t: 0,
+    Iext: 15,
+    stimUntil: 0,
+    history: [],
+    lastHistoryT: -Infinity,
+    spikeTimes: [],
+    lastSpike: -Infinity,
+    phase: 'resting',
+    params: { ...PRESETS.normal },
+    speed: 1.0,
+    pulses: [],
+    ions: [],
+    spikeFlash: 0,
+    paused: false,
+  };
+
+  function resetSim() {
+    const V = -65;
+    sim.V = V;
+    sim.m = alphaM(V) / (alphaM(V) + betaM(V));
+    sim.h = alphaH(V) / (alphaH(V) + betaH(V));
+    sim.n = alphaN(V) / (alphaN(V) + betaN(V));
+    sim.t = 0;
+    sim.history = [];
+    sim.lastHistoryT = -Infinity;
+    sim.spikeTimes = [];
+    sim.lastSpike = -Infinity;
+    sim.phase = 'resting';
+    sim.stimUntil = 0;
+    sim.pulses = [];
+    sim.ions = [];
+    sim.spikeFlash = 0;
+  }
+
+  function stimulate() {
+    sim.stimUntil = sim.t + STIM_DURATION;
+  }
+
+  function stepSim() {
+    const V = sim.V;
+    const m = sim.m, h = sim.h, n = sim.n;
+
+    const dm = alphaM(V) * (1 - m) - betaM(V) * m;
+    const dh = alphaH(V) * (1 - h) - betaH(V) * h;
+    const dn = alphaN(V) * (1 - n) - betaN(V) * n;
+
+    const p = sim.params;
+    const INa = p.gNa * m * m * m * h * (V - p.ENa);
+    const IK  = p.gK  * n * n * n * n * (V - p.EK);
+    const IL  = HH.gL * (V - HH.EL);
+
+    const I = sim.t < sim.stimUntil ? sim.Iext : 0;
+    const dV = (-INa - IK - IL + I) / HH.Cm;
+
+    sim.V = V + dV * DT;
+    sim.m = Math.max(0, Math.min(1, m + dm * DT));
+    sim.h = Math.max(0, Math.min(1, h + dh * DT));
+    sim.n = Math.max(0, Math.min(1, n + dn * DT));
+    sim.t += DT;
+
+    // Spike detection: crossing 0 mV upward, with refractory guard
+    if (V < 0 && sim.V >= 0 && sim.t - sim.lastSpike > 0.5) {
+      sim.lastSpike = sim.t;
+      sim.spikeTimes.push(sim.t);
+      sim.pulses.push({ start: performance.now() });
+      sim.spikeFlash = 1.0;
+    }
+
+    updatePhase(dV);
+
+    if (sim.t - sim.lastHistoryT >= HISTORY_INTERVAL) {
+      sim.history.push({ t: sim.t, V: sim.V, phase: sim.phase });
+      sim.lastHistoryT = sim.t;
+      while (sim.history.length > HISTORY_SIZE) sim.history.shift();
+    }
+  }
+
+  function updatePhase(dV) {
+    const V = sim.V;
+    if (V < -75) sim.phase = 'hyperpolarization';
+    else if (V < -55) sim.phase = dV > 0.3 ? 'threshold' : 'resting';
+    else if (V < 0) sim.phase = dV > 0 ? 'depolarization' : 'repolarization';
+    else sim.phase = dV > 0 ? 'depolarization' : 'peak';
+  }
+
+  // ============ CANVAS SETUP ============
+  function setupCanvas(canvas) {
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    const w = Math.max(1, rect.width);
+    const h = Math.max(1, rect.height);
+    canvas.width = Math.floor(w * dpr);
+    canvas.height = Math.floor(h * dpr);
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return { ctx, w, h };
+  }
+
+  const canvases = {
+    neuron: document.getElementById('neuron-canvas'),
+    membrane: document.getElementById('membrane-canvas'),
+    trace: document.getElementById('trace-canvas'),
+  };
+  const ctxs = {};
+
+  function resizeAll() {
+    for (const k in canvases) ctxs[k] = setupCanvas(canvases[k]);
+  }
+  window.addEventListener('resize', resizeAll);
+
+  // ============ NEURON RENDER ============
+  function drawNeuron() {
+    const { ctx, w, h } = ctxs.neuron;
+    ctx.clearRect(0, 0, w, h);
+
+    const cy = h / 2;
+    const somaX = Math.min(80, w * 0.12);
+    const somaR = Math.min(24, h * 0.28);
+    const axonStart = somaX + somaR + 4;
+    const axonEnd = w - 55;
+
+    // Dendrites
+    ctx.strokeStyle = 'rgba(0, 212, 255, 0.35)';
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    const dendrites = [
+      [-1, -0.8], [-1, -0.3], [-1, 0.3], [-1, 0.8],
+      [-0.75, -1], [-0.75, 1], [-0.4, -1.1], [-0.4, 1.1],
+    ];
+    dendrites.forEach(([dx, dy]) => {
+      ctx.beginPath();
+      ctx.moveTo(somaX + dx * somaR * 0.7, cy + dy * somaR * 0.7);
+      const endX = somaX + dx * (somaR + 42);
+      const endY = cy + dy * (somaR + 42);
+      const ctrlX = somaX + dx * (somaR + 20);
+      const ctrlY = cy + dy * (somaR + 26);
+      ctx.quadraticCurveTo(ctrlX, ctrlY, endX, endY);
+      ctx.stroke();
+    });
+
+    // Axon
+    ctx.beginPath();
+    ctx.moveTo(axonStart, cy);
+    ctx.lineTo(axonEnd, cy);
+    ctx.strokeStyle = 'rgba(0, 212, 255, 0.45)';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // Myelin sheaths
+    const numMyelin = Math.max(3, Math.floor((axonEnd - axonStart) / 90));
+    const gap = 7;
+    const totalLen = axonEnd - axonStart;
+    const myelinLen = Math.max(18, (totalLen - (numMyelin + 1) * gap) / numMyelin);
+    for (let i = 0; i < numMyelin; i++) {
+      const x = axonStart + gap + i * (myelinLen + gap);
+      ctx.beginPath();
+      ctx.roundRect(x, cy - 9, myelinLen, 18, 7);
+      ctx.fillStyle = 'rgba(179, 102, 255, 0.13)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(179, 102, 255, 0.35)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
+    // Terminals
+    const termX = axonEnd;
+    [[0, -1], [0.7, -0.7], [0.7, 0.7], [0, 1]].forEach(([dx, dy]) => {
+      ctx.beginPath();
+      ctx.moveTo(termX, cy);
+      ctx.lineTo(termX + 18, cy + dy * 22);
+      ctx.strokeStyle = 'rgba(0, 212, 255, 0.45)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(termX + 18, cy + dy * 22, 3.5, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(0, 212, 255, 0.55)';
+      ctx.fill();
+    });
+
+    // Soma glow
+    const glow = Math.max(0, Math.min(1, (sim.V + 80) / 130));
+    ctx.save();
+    ctx.shadowColor = `rgba(0, 212, 255, ${0.3 + glow * 0.5})`;
+    ctx.shadowBlur = 18 + glow * 28;
+    ctx.beginPath();
+    ctx.arc(somaX, cy, somaR, 0, Math.PI * 2);
+    const grad = ctx.createRadialGradient(somaX, cy, 0, somaX, cy, somaR);
+    grad.addColorStop(0, `rgba(0, 212, 255, ${0.28 + glow * 0.45})`);
+    grad.addColorStop(1, `rgba(0, 100, 200, ${0.08 + glow * 0.2})`);
+    ctx.fillStyle = grad;
+    ctx.fill();
+    ctx.strokeStyle = `rgba(0, 212, 255, ${0.45 + glow * 0.55})`;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.restore();
+
+    // Nucleus
+    ctx.beginPath();
+    ctx.arc(somaX, cy, somaR * 0.42, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(179, 102, 255, 0.28)';
+    ctx.fill();
+
+    // Propagating pulses
+    const now = performance.now();
+    sim.pulses = sim.pulses.filter(p => now - p.start < 2400);
+    sim.pulses.forEach(p => {
+      const progress = (now - p.start) / 1900;
+      if (progress < 0 || progress > 1) return;
+      const x = axonStart + progress * (axonEnd - axonStart);
+      ctx.save();
+      ctx.shadowColor = 'rgba(255, 107, 53, 0.9)';
+      ctx.shadowBlur = 30;
+      const g = ctx.createRadialGradient(x, cy, 0, x, cy, 16);
+      g.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
+      g.addColorStop(0.35, 'rgba(255, 107, 53, 0.85)');
+      g.addColorStop(1, 'rgba(255, 107, 53, 0)');
+      ctx.beginPath();
+      ctx.arc(x, cy, 16, 0, Math.PI * 2);
+      ctx.fillStyle = g;
+      ctx.fill();
+      ctx.restore();
+    });
+
+    // Labels
+    ctx.font = '9px ui-monospace, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(107, 122, 153, 0.65)';
+    if (w > 380) {
+      ctx.fillText('DENDRITES', somaX - 30, cy - somaR - 26);
+      ctx.fillText('SOMA', somaX, cy + somaR + 16);
+      ctx.fillText('AXON', (axonStart + axonEnd) / 2, cy - 18);
+      ctx.fillText('TERMINALS', axonEnd + 14, cy + 42);
+    }
+  }
+
+  // ============ MEMBRANE RENDER ============
+  function drawLipids(ctx, w, memTop, memBot) {
+    const spacing = 12;
+    const headR = 3.2;
+    const num = Math.ceil(w / spacing);
+
+    const grad = ctx.createLinearGradient(0, memTop, 0, memBot);
+    grad.addColorStop(0, 'rgba(80, 110, 160, 0.14)');
+    grad.addColorStop(0.5, 'rgba(60, 80, 120, 0.06)');
+    grad.addColorStop(1, 'rgba(80, 110, 160, 0.14)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, memTop, w, memBot - memTop);
+
+    ctx.fillStyle = 'rgba(140, 170, 220, 0.32)';
+    for (let i = 0; i < num; i++) {
+      const x = i * spacing + spacing / 2;
+      ctx.beginPath();
+      ctx.arc(x, memTop + headR, headR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(x, memBot - headR, headR, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  function drawChannel(ctx, ch, midY, memH) {
+    const { x, color, openness, label, gates } = ch;
+    const chH = memH + 14;
+    const y = midY - chH / 2;
+    const poreW = 5 + openness * 15;
+    const barW = 11;
+
+    ctx.save();
+    if (openness > 0.04) {
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 22 * openness;
+    }
+
+    // Left bar
+    ctx.beginPath();
+    ctx.roundRect(x - poreW / 2 - barW, y, barW, chH, 5);
+    ctx.fillStyle = color + '33';
+    ctx.fill();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Right bar
+    ctx.beginPath();
+    ctx.roundRect(x + poreW / 2, y, barW, chH, 5);
+    ctx.fillStyle = color + '33';
+    ctx.fill();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.restore();
+
+    // Pore glow
+    if (openness > 0.08) {
+      const pg = ctx.createLinearGradient(0, y, 0, y + chH);
+      const a = Math.floor(openness * 120).toString(16).padStart(2, '0');
+      pg.addColorStop(0, color + '00');
+      pg.addColorStop(0.5, color + a);
+      pg.addColorStop(1, color + '00');
+      ctx.fillStyle = pg;
+      ctx.fillRect(x - poreW / 2, y, poreW, chH);
+    }
+
+    // Label
+    ctx.font = '11px ui-monospace, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = color;
+    ctx.fillText(label, x, y - 8);
+
+    // Gate indicators
+    if (gates && gates.length) {
+      const gateY = y + chH + 12;
+      gates.forEach((g, i) => {
+        const gx = x + (i - (gates.length - 1) / 2) * 22;
+        // Gate bar
+        const barMaxW = 16;
+        const barH = 3;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+        ctx.beginPath();
+        ctx.roundRect(gx - barMaxW / 2, gateY, barMaxW, barH, 2);
+        ctx.fill();
+        // Gate fill
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.roundRect(gx - barMaxW / 2, gateY, barMaxW * g.value, barH, 2);
+        ctx.fill();
+        // Gate label
+        ctx.font = '8px ui-monospace, monospace';
+        ctx.fillStyle = 'rgba(224, 230, 237, 0.7)';
+        ctx.fillText(g.name, gx, gateY + 14);
+      });
+    }
+  }
+
+  function updateAndDrawIons(ctx, w, h, memTop, memBot, channels) {
+    const naCh = channels[0];
+    const kCh = channels[1];
+
+    // Spawn
+    if (naCh.openness > 0.04 && Math.random() < naCh.openness * 0.9) {
+      sim.ions.push({
+        type: 'Na',
+        x: naCh.x + (Math.random() - 0.5) * 16,
+        y: memTop - 4,
+        vy: 1.6 + Math.random() * 0.8,
+        vx: (Math.random() - 0.5) * 0.25,
+        life: 0,
+      });
+    }
+    if (kCh.openness > 0.04 && Math.random() < kCh.openness * 0.9) {
+      sim.ions.push({
+        type: 'K',
+        x: kCh.x + (Math.random() - 0.5) * 16,
+        y: memBot + 4,
+        vy: -(1.6 + Math.random() * 0.8),
+        vx: (Math.random() - 0.5) * 0.25,
+        life: 0,
+      });
+    }
+
+    // Update + draw
+    for (let i = sim.ions.length - 1; i >= 0; i--) {
+      const ion = sim.ions[i];
+      ion.x += ion.vx;
+      ion.y += ion.vy;
+      ion.life += 1;
+
+      if (ion.y < -20 || ion.y > h + 20 || ion.life > 320) {
+        sim.ions.splice(i, 1);
+        continue;
+      }
+
+      const color = ion.type === 'Na' ? '#ff6b35' : '#00d4ff';
+      const alpha = Math.min(1, (320 - ion.life) / 90);
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 9;
+      ctx.beginPath();
+      ctx.arc(ion.x, ion.y, 3, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+      ctx.restore();
+    }
+
+    if (sim.ions.length > MAX_IONS) sim.ions.splice(0, sim.ions.length - MAX_IONS);
+  }
+
+  function drawMembrane() {
+    const { ctx, w, h } = ctxs.membrane;
+    ctx.clearRect(0, 0, w, h);
+
+    const midY = h / 2;
+    const memH = Math.min(80, h * 0.34);
+    const memTop = midY - memH / 2;
+    const memBot = midY + memH / 2;
+
+    // Extracellular gradient
+    const topG = ctx.createLinearGradient(0, 0, 0, memTop);
+    topG.addColorStop(0, 'rgba(255, 107, 53, 0.02)');
+    topG.addColorStop(1, 'rgba(255, 107, 53, 0.07)');
+    ctx.fillStyle = topG;
+    ctx.fillRect(0, 0, w, memTop);
+
+    // Intracellular gradient
+    const botG = ctx.createLinearGradient(0, memBot, 0, h);
+    botG.addColorStop(0, 'rgba(0, 212, 255, 0.07)');
+    botG.addColorStop(1, 'rgba(0, 212, 255, 0.02)');
+    ctx.fillStyle = botG;
+    ctx.fillRect(0, memBot, w, h - memBot);
+
+    // Labels
+    ctx.font = '9px ui-monospace, monospace';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = 'rgba(255, 107, 53, 0.55)';
+    ctx.fillText('EXTRACELLULAR', 14, 16);
+    ctx.fillStyle = 'rgba(0, 212, 255, 0.55)';
+    ctx.fillText('INTRACELLULAR', 14, h - 8);
+
+    // Lipid bilayer
+    drawLipids(ctx, w, memTop, memBot);
+
+    // Channels
+    const channels = [
+      {
+        x: w * 0.22,
+        color: '#ff6b35',
+        openness: Math.pow(sim.m, 3) * sim.h,
+        label: 'Na⁺',
+        gates: [{ value: sim.m, name: 'm' }, { value: sim.h, name: 'h' }],
+      },
+      {
+        x: w * 0.5,
+        color: '#00d4ff',
+        openness: Math.pow(sim.n, 4),
+        label: 'K⁺',
+        gates: [{ value: sim.n, name: 'n' }],
+      },
+      {
+        x: w * 0.78,
+        color: '#5a6a85',
+        openness: 0.35,
+        label: 'Leak',
+        gates: [],
+      },
+    ];
+
+    channels.forEach(ch => drawChannel(ctx, ch, midY, memH));
+    updateAndDrawIons(ctx, w, h, memTop, memBot, channels);
+
+    // Spike flash overlay
+    if (sim.spikeFlash > 0.01) {
+      ctx.fillStyle = `rgba(0, 212, 255, ${sim.spikeFlash * 0.06})`;
+      ctx.fillRect(0, 0, w, h);
+    }
+
+    // Voltage indicator
+    const vNorm = Math.max(0, Math.min(1, (sim.V + 90) / 140));
+    const barW = 4;
+    const barX = w - 18;
+    const barY = 20;
+    const barH = h - 40;
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
+    ctx.beginPath();
+    ctx.roundRect(barX, barY, barW, barH, 2);
+    ctx.fill();
+    const fillH = barH * vNorm;
+    const vColor = sim.V > 0 ? '#ff4757' : sim.V > -55 ? '#ff6b35' : '#00d4ff';
+    ctx.fillStyle = vColor;
+    ctx.beginPath();
+    ctx.roundRect(barX, barY + barH - fillH, barW, fillH, 2);
+    ctx.fill();
+    ctx.save();
+    ctx.shadowColor = vColor;
+    ctx.shadowBlur = 10;
+    ctx.fillStyle = vColor;
+    ctx.beginPath();
+    ctx.roundRect(barX, barY + barH - fillH, barW, fillH, 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // ============ TRACE RENDER ============
+  function drawTrace() {
+    const { ctx, w, h } = ctxs.trace;
+    ctx.clearRect(0, 0, w, h);
+
+    const padL = 42, padR = 14, padT = 14, padB = 22;
+    const plotW = w - padL - padR;
+    const plotH = h - padT - padB;
+    const vMin = -95, vMax = 55;
+    const vToY = v => padT + (vMax - v) / (vMax - vMin) * plotH;
+
+    // Plot bg
+    ctx.fillStyle = 'rgba(5, 8, 16, 0.5)';
+    ctx.fillRect(padL, padT, plotW, plotH);
+
+    // Grid
+    const gridV = [-90, -70, -55, -20, 0, 20, 40];
+    gridV.forEach(v => {
+      const y = vToY(v);
+      ctx.beginPath();
+      ctx.moveTo(padL, y);
+      ctx.lineTo(w - padR, y);
+      if (v === -55) {
+        ctx.setLineDash([4, 4]);
+        ctx.strokeStyle = 'rgba(255, 107, 53, 0.3)';
+      } else if (v === -70) {
+        ctx.setLineDash([4, 4]);
+        ctx.strokeStyle = 'rgba(0, 212, 255, 0.28)';
+      } else {
+        ctx.setLineDash([]);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
+      }
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.font = '9px ui-monospace, monospace';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      const special = v === -70 || v === -55 || v === 0;
+      ctx.fillStyle = special ? 'rgba(224, 230, 237, 0.7)' : 'rgba(107, 122, 153, 0.5)';
+      ctx.fillText(v.toString(), padL - 6, y);
+    });
+
+    // Threshold/resting labels
+    ctx.font = '8px ui-monospace, monospace';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = 'rgba(255, 107, 53, 0.6)';
+    ctx.fillText('THRESHOLD', padL + 5, vToY(-55) - 4);
+    ctx.fillStyle = 'rgba(0, 212, 255, 0.6)';
+    ctx.fillText('RESTING', padL + 5, vToY(-70) - 4);
+
+    if (sim.history.length > 1) {
+      const tEnd = sim.t;
+      const tStart = tEnd - HISTORY_DURATION;
+      const xOf = t => padL + Math.max(0, Math.min(1, (t - tStart) / HISTORY_DURATION)) * plotW;
+      const yOf = V => vToY(V);
+
+      // Fill under curve
+      ctx.beginPath();
+      ctx.moveTo(xOf(sim.history[0].t), yOf(sim.history[0].V));
+      for (let i = 1; i < sim.history.length; i++) {
+        ctx.lineTo(xOf(sim.history[i].t), yOf(sim.history[i].V));
+      }
+      const last = sim.history[sim.history.length - 1];
+      ctx.lineTo(xOf(last.t), padT + plotH);
+      ctx.lineTo(xOf(sim.history[0].t), padT + plotH);
+      ctx.closePath();
+      const fillG = ctx.createLinearGradient(0, padT, 0, padT + plotH);
+      fillG.addColorStop(0, 'rgba(0, 212, 255, 0.16)');
+      fillG.addColorStop(1, 'rgba(0, 212, 255, 0)');
+      ctx.fillStyle = fillG;
+      ctx.fill();
+
+      // Glow line
+      ctx.beginPath();
+      ctx.moveTo(xOf(sim.history[0].t), yOf(sim.history[0].V));
+      for (let i = 1; i < sim.history.length; i++) {
+        ctx.lineTo(xOf(sim.history[i].t), yOf(sim.history[i].V));
+      }
+      ctx.strokeStyle = 'rgba(0, 212, 255, 0.18)';
+      ctx.lineWidth = 5;
+      ctx.stroke();
+
+      // Main line, phase-colored
+      for (let i = 1; i < sim.history.length; i++) {
+        const p0 = sim.history[i - 1];
+        const p1 = sim.history[i];
+        ctx.beginPath();
+        ctx.moveTo(xOf(p0.t), yOf(p0.V));
+        ctx.lineTo(xOf(p1.t), yOf(p1.V));
+        ctx.strokeStyle = PHASE_COLORS[p1.phase] || '#00d4ff';
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+        ctx.stroke();
+      }
+
+      // Leading dot
+      const lastPt = sim.history[sim.history.length - 1];
+      const lx = xOf(lastPt.t);
+      const ly = yOf(lastPt.V);
+      ctx.save();
+      ctx.shadowColor = '#00d4ff';
+      ctx.shadowBlur = 14;
+      ctx.beginPath();
+      ctx.arc(lx, ly, 3.5, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // Right edge marker
+    ctx.beginPath();
+    ctx.moveTo(padL + plotW, padT);
+    ctx.lineTo(padL + plotW, padT + plotH);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Spike raster strip
+    const rasterY = h - 8;
+    ctx.font = '7px ui-monospace, monospace';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = 'rgba(107, 122, 153, 0.5)';
+    ctx.fillText('SPIKES', 4, rasterY + 3);
+    sim.spikeTimes.forEach(st => {
+      const x = padL + Math.max(0, Math.min(1, (st - (sim.t - HISTORY_DURATION)) / HISTORY_DURATION)) * plotW;
+      if (x < padL || x > padL + plotW) return;
+      ctx.beginPath();
+      ctx.moveTo(x, rasterY - 4);
+      ctx.lineTo(x, rasterY + 4);
+      ctx.strokeStyle = 'rgba(255, 107, 53, 0.8)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    });
+  }
+
+  // ============ UI ============
+  const phasesEl = document.getElementById('phases');
+  PHASES.forEach(p => {
+    const div = document.createElement('div');
+    div.className = 'phase';
+    div.dataset.phase = p.id;
+    div.innerHTML = `
+      <div class="phase-dot" style="background:${PHASE_COLORS[p.id]};color:${PHASE_COLORS[p.id]}"></div>
+      <div class="phase-name">${p.name}</div>
+    `;
+    phasesEl.appendChild(div);
+  });
+
+  function updateUI() {
+    document.getElementById('vm-value').textContent = sim.V.toFixed(1) + ' mV';
+    document.getElementById('time-value').textContent = sim.t.toFixed(1) + ' ms';
+    document.getElementById('spike-value').textContent = sim.spikeTimes.length;
+
+    const vmEl = document.getElementById('vm-value');
+    vmEl.style.color = sim.V > 0 ? '#ff4757' : sim.V > -55 ? '#ff6b35' : '#00d4ff';
+
+    document.getElementById('phase-badge').textContent = sim.phase;
+
+    document.querySelectorAll('.phase').forEach(el => {
+      el.classList.toggle('active', el.dataset.phase === sim.phase);
+    });
+
+    const badge = document.getElementById('patch-badge');
+    badge.textContent = `Na⁺ ${(Math.pow(sim.m, 3) * sim.h).toFixed(2)} · K⁺ ${(Math.pow(sim.n, 4)).toFixed(2)}`;
+  }
+
+  // Controls
+  document.getElementById('stimulate-btn').addEventListener('click', stimulate);
+  document.getElementById('reset-btn').addEventListener('click', () => {
+    resetSim();
+    document.querySelectorAll('.preset').forEach(el => el.classList.remove('active'));
+    document.querySelector('.preset[data-preset="normal"]').classList.add('active');
+    document.getElementById('preset-badge').textContent = 'normal';
+  });
+
+  document.querySelectorAll('.preset').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const name = btn.dataset.preset;
+      const preset = PRESETS[name];
+      sim.params = { gNa: preset.gNa, gK: preset.gK, ENa: preset.ENa, EK: preset.EK };
+      document.querySelectorAll('.preset').forEach(el => el.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('preset-badge').textContent = preset.label;
+      // Re-equilibrate gating at current V
+      const V = sim.V;
+      sim.m = alphaM(V) / (alphaM(V) + betaM(V));
+      sim.h = alphaH(V) / (alphaH(V) + betaH(V));
+      sim.n = alphaN(V) / (alphaN(V) + betaN(V));
+    });
+  });
+
+  const speedSlider = document.getElementById('speed');
+  const speedLabel = document.getElementById('speed-value');
+  function updateSpeed() {
+    const s = parseInt(speedSlider.value, 10);
+    sim.speed = 0.1 + (s / 100) * 2.4;
+    speedLabel.textContent = sim.speed.toFixed(1) + '×';
+  }
+  speedSlider.addEventListener('input', updateSpeed);
+  updateSpeed();
+
+  const stimSlider = document.getElementById('stim');
+  const stimLabel = document.getElementById('stim-value');
+  function updateStim() {
+    sim.Iext = parseInt(stimSlider.value, 10);
+    stimLabel.textContent = sim.Iext.toString();
+  }
+  stimSlider.addEventListener('input', updateStim);
+  updateStim();
+
+  // Keyboard shortcuts
+  window.addEventListener('keydown', e => {
+    if (e.code === 'Space') { e.preventDefault(); stimulate(); }
+    if (e.key === 'r' || e.key === 'R') resetSim();
+  });
+
+  // ============ MAIN LOOP ============
+  let lastTime = performance.now();
+
+  function loop(now) {
+    const realDt = Math.min(50, now - lastTime);
+    lastTime = now;
+
+    // Steps per frame scaled by speed
+    // base: at speed 1.0, ~500 steps/frame; at 2.5x, ~1250 steps/frame
+    const baseSteps = 500;
+    const steps = Math.max(20, Math.floor(baseSteps * sim.speed));
+
+    for (let i = 0; i < steps; i++) {
+      stepSim();
+    }
+
+    // Decay spike flash
+    sim.spikeFlash *= 0.94;
+
+    drawNeuron();
+    drawMembrane();
+    drawTrace();
+    updateUI();
+
+    requestAnimationFrame(loop);
+  }
+
+  // Init
+  resetSim();
+  resizeAll();
+  // small delay to let layout settle
+  setTimeout(resizeAll, 50);
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
